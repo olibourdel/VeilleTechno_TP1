@@ -1,0 +1,174 @@
+<html>
+    <body>
+        <div id="graphContainer" style="margin:auto; width: 700px; height: 500px;">
+
+        </div>
+    </body>
+    <script defer>
+        const svgns = "http://www.w3.org/2000/svg";
+        let viewPortMaxUnitX = 1000;
+        let viewPortMaxUnitY = 1000;
+        let viewport = null;
+
+        const divisionWidth = 3;
+        const subdivisionWidth = 1;
+
+        const title = "Ventes 2022";
+        const data = [6500, 5550, 4200, 4525, 2500, 1500, 500, 1000, 1750, 2300, 3700, 3500];
+        const labels = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+        const unit = "$";
+
+        const titleFontSize = 3;
+        const incrementFontSize = 1.5;
+        const labelFontSize = 1.5;
+        const labelAngle = 45;
+        const graphMargins = 20;
+        const graphSpaceBetween = 20;
+
+        function RectArea(x1,y1,x2,y2){
+            return { p1 : { x: x1, y : y1 }, p2 : { x : x2, y : y2 }};
+        }
+
+        function SubRectArea(area,left1,top1,left2,top2){
+            return { p1 : { x: area.p2.x * left1, y : area.p2.y * top1 }, p2 : { x : area.p2.x * left2, y : area.p2.x * top2 }};
+        }
+
+        const drawArea = RectArea(0,0,viewPortMaxUnitX,viewPortMaxUnitY);
+        const graphRectArea = SubRectArea(drawArea, 0.15, 0.1, 0.85, 0.9);
+        const titleRectArea = SubRectArea(drawArea, 0.15, 0, 0.85, 0.1);
+        const labelRectArea = SubRectArea(drawArea, 0, 0.9, 0.85, 1);
+        const categoryReactArea = SubRectArea(drawArea, 0, 0.1, 0.15, 0.9);
+
+        /*
+                ****************DRAW AREA****************
+            [-------][------------Title-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-Label-][------------Graph-------------][-------]
+            [-------][----------Categories----------][-------]     
+        */
+        
+        init_UI();
+
+        function init_UI() {
+            insertViewPort("graphContainer");
+            // demoShapes();
+            drawGraph(data,labels,7,6);
+        }
+
+        function insertViewPort(containerId) {
+            viewport = document.createElementNS(svgns, "svg");
+            viewport.setAttribute("id", "viewport");
+            viewport.setAttribute("viewBox", "0 0 " + viewPortMaxUnitX + " " + viewPortMaxUnitY);
+            document.getElementById(containerId).appendChild(viewport);
+        }
+
+        function drawGraph(data,labels,divisions,subdivisions,scale, min = null, max = null){
+            min = min ?? Math.min(...data);
+            max = max ?? Math.max(...data);
+
+            viewport.appendChild(rect(drawArea.p1.x, drawArea.p1.y, drawArea.p2.x - drawArea.p1.x,drawArea.p2.y - drawArea.p1.y, 'none','black', 20));
+
+            let titleElem = text(titleRectArea.p1.x + (titleRectArea.p2.x - titleRectArea.p1.x) / 2, titleRectArea.p1.y + (titleRectArea.p2.y - titleRectArea.p1.y) / 2, title, 0, titleFontSize)
+            viewport.appendChild(centerText(titleElem));
+
+            drawDivisions(divisions,subdivisions,min,max);
+            drawBars(data,labels,max);
+            // viewport.appendChild(line(7.5, 400, 400, 400, 'black', 3))
+        }
+        
+        function drawBars(data,labels,max){
+            let barArea = (graphRectArea.p2.x - graphRectArea.p1.x) - graphMargins * 2;
+            let barWidth = (barArea - graphSpaceBetween * (data.length - 1)) / data.length;
+            let graphHeight = graphRectArea.p2.y - graphRectArea.p1.y;
+
+            for(let i = 0; i < data.length; i++){
+                let percent = (data[i] / max);
+                let barPos = graphRectArea.p1.x + graphMargins + graphSpaceBetween * i + barWidth * i;
+                let barHeight = graphHeight * percent;
+                let labelMid =  labelRectArea.p1.y + (labelRectArea.p2.y - labelRectArea.p1.y) / 2;
+                let color = `hsl(${percent * 100},100%,50%)`;
+                viewport.appendChild(
+                    rect(
+                            barPos,
+                            graphRectArea.p1.y + graphHeight - barHeight, 
+                            barWidth, barHeight, 
+                            color,
+                            color
+                        )
+                );
+                viewport.appendChild(centerText(text(barPos + barWidth / 2, labelMid, labels[i], labelAngle, labelFontSize)));
+            }
+        }
+
+        function drawDivisions(divisions,subdivisions, min, max){
+            let reserved = divisionWidth / 2; /*Less space between divisions to reserve space for top-most and bottom-most divisions*/
+
+            let divisionStepCalculator = (areaUnit) => (areaUnit / (divisions - 1)) - (reserved / divisions);
+            
+            let divisionStep =  divisionStepCalculator(graphRectArea.p2.y - graphRectArea.p1.y);/*Divisions will be closer to have space for bottom-most division*/
+            let subdivisonStep = divisionStep / (subdivisions + 1);
+            let divisionEnd = graphRectArea.p2.x;
+
+            let incrementMid = (categoryReactArea.p2.x - categoryReactArea.p1.x) / 2;
+            let incrementStep = divisionStepCalculator(categoryReactArea.p2.y - categoryReactArea.p1.y);
+            let incrementValue = Math.round((max - min) / (divisions - 1));
+
+            let drawDiv = (i) => {
+                let divY = graphRectArea.p1.y + divisionStep * i + reserved;
+                viewport.appendChild(line(graphRectArea.p1.x, divY, divisionEnd, divY, 'black', divisionWidth))
+                viewport.appendChild(text(incrementMid,categoryReactArea.p1.y + incrementStep * (divisions - i - 1) + reserved + incrementFontSize * 2, `${min + incrementValue * i} ${unit}`, 0, incrementFontSize));
+            }
+
+            for(let i = 0; i < divisions - 1; i++){
+                drawDiv(i);
+                let subDivCount = 0;
+                for(let j = 1; j <= subdivisions; j++){
+                    let subY = graphRectArea.p1.y + divisionStep * i + subdivisonStep * j + reserved;
+                    viewport.appendChild(line(graphRectArea.p1.x, subY, divisionEnd, subY, 'black', subdivisionWidth))
+                }
+            }
+            drawDiv(divisions - 1);
+        }
+
+        function line(x1, y1, x2, y2, stroke = "black", strokeWidth = 1) {
+            let line = document.createElementNS(svgns, "line");
+            line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+            line.setAttribute("stroke", stroke);
+            line.setAttribute("stroke-width", strokeWidth);
+            return line;
+        }
+
+        function rect(x, y, width, height, fill = "white", stroke = "black", strokeWidth = 1) {
+            let rect = document.createElementNS(svgns, "rect");
+            rect.setAttribute("x", x); rect.setAttribute("y", y);
+            rect.setAttribute("width", width); rect.setAttribute("height", height);
+            rect.setAttribute("fill", fill); rect.setAttribute("stroke", stroke);
+            rect.setAttribute("stroke-width", strokeWidth);
+            return rect;
+        }
+
+        function text(x, y, content, angle = 0, size = "1", fill = "black") {
+            let text = document.createElementNS(svgns, "text");
+            text.setAttribute("x", x); text.setAttribute("y", y);
+            text.setAttribute("transform", `rotate(${angle},${x},${y})`);
+            text.setAttribute("font-size", size + "em");
+            text.setAttribute("fill", fill);
+            text.innerHTML = content;
+            return text;
+        }
+
+        function centerText(textElem){
+            textElem.setAttribute('dominant-baseline','middle');
+            textElem.setAttribute('text-anchor','middle');
+
+            return textElem;
+        }
+    </script>
+</html>
